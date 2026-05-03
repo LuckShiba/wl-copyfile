@@ -1,53 +1,11 @@
 use ashpd::documents::FileTransfer;
 use futures_executor::block_on;
-use libc::{O_RDWR, close, dup2, fork, open, setsid};
+use libc::daemon;
 use std::env;
 use std::fs;
 use std::path::Path;
 use std::process::exit;
 use wl_clipboard_rs::copy::{self, MimeSource, MimeType, Source};
-
-unsafe fn self_orphan() {
-    // wonder if there's a better way to do this.
-    // I double-fork it to become an orphan process and
-    // redirect the FDs to /dev/null so the shell properly closes
-    // without waiting for it to close.
-
-    unsafe {
-        // are we still programming in Rust?
-
-        let pid = fork();
-        if pid < 0 {
-            panic!("Failed to fork!");
-        }
-        if pid > 0 {
-            exit(0);
-        }
-
-        if setsid() < 0 {
-            panic!("Failed to set session id.");
-        }
-
-        let pid = fork();
-        if pid < 0 {
-            panic!("Failed second fork!");
-        }
-        if pid > 0 {
-            exit(0);
-        }
-
-        let null = open("/dev/null\0".as_ptr() as *const i8, O_RDWR);
-        if null != -1 {
-            dup2(null, 0);
-            dup2(null, 1);
-            dup2(null, 2);
-
-            if null > 2 {
-                close(null);
-            }
-        }
-    }
-}
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -74,7 +32,10 @@ fn main() {
 
     // we need to keep the process alive so it's still serving the FileTransfer portal by the end of it.
     unsafe {
-        self_orphan();
+        let res = daemon(0, 0);
+        if res < 0 {
+            panic!("Couldn't create daemon! Error: {}", res);
+        }
     }
 
     block_on(work(abs_path)).unwrap();
