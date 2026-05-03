@@ -36,6 +36,7 @@
             rustfmt
             clippy
             pkg-config
+            rust-analyzer
           ];
         };
       });
